@@ -80,6 +80,8 @@ ReadPackage( "polycyclic", "gap/basic/orbstab.gi");
 
 ReadPackage( "polycyclic", "gap/basic/construct.gi");
 
+ReadPackage( "polycyclic", "gap/basic/newigs.gi");
+
 ##
 ## cohomology  - extensions and complements
 ##
