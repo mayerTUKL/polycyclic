@@ -429,3 +429,91 @@ InstallGlobalFunction( NewCgs, function(U,P)
 	return V;
 end );
 
+
+# Given a set of generators U of some subgroup and a partition P of the corresponding collector computes a new set of generators result such that Depth(result[i]) < Depth(result[j]) for all i < j
+# Every operation on U is mirrored on U2 and the function returns result2 and the changed U2 additionally
+# CAUTION: Changes the input variable U!
+BindGlobal( "EcholonParallel", function(U,P,U2)
+	local compare,n,l,coll,result,result_inv,pos,t,j,i,lastpos,S,H,V,r,r2,neutral,exponents,e,expRels,elm,pivotIndex,orders,v, elm2,result2,result2_inv;
+	
+	# TODO There is no SortByParallel? needed to replace it with the two argument version of sort
+	compare := function(a,b) return Depth(a) < Depth(b); end;
+	# keeping U sorted makes search easier
+	SortParallel(U,U2,compare);
+	neutral := U[1]^0;
+	coll := Collector(U[1]);
+	n := NumberOfGenerators(coll);
+	l := Length(P);
+	result :=[];
+	result_inv :=[];
+	result2 := [];
+	result2_inv := [];
+	pos :=1;
+	expRels := FiniteRelationsAsMatrixPartition(coll,P);
+	orders := RelativeOrders(coll);
+	
+	# Iterate over the blocks given by the partition
+	for t in [1..l] do
+		# find the relevant generators, i. e. of depth at most P[t][2]
+		lastpos := SearchSortedLastByDepth(U,P[t][2]);
+		if lastpos <> 0 then
+			# form the corresponding integer submatrix of the exponents and compute an HNF with its LLL reduced transform
+			S := [];
+			for i in [1..lastpos] do
+				exponents := Exponents(U[i]);
+				S[i] := exponents{[P[t][1]..P[t][2]]};
+			od;
+			# glue the exponent relations right after that
+			Append(S,expRels[t]);
+			# compute HNF
+			H := HermiteIntMatLLLTrans(S);
+			r := Rank(H[1]);
+			r2 := r;
+			V := H[2];
+
+			# apply the transformation to compute the new generators corresponding to the pivots
+			for j in [1..r] do
+				# first check whether the given pivot corresponds to one of the finite exponent relations
+				pivotIndex := PositionNonZero(H[1][j]);
+				if H[1][j][pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
+
+					elm := neutral;
+					elm2 := neutral;
+					for i in [1..lastpos] do
+						if V[j,i] <> 0 then
+							elm := elm * U[i]^V[j,i];
+							elm2 := elm2 * U2[i]^V[j,i];
+						fi;
+					od;
+					result[pos] := elm;
+					result2[pos] := elm2;
+					# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
+					result_inv[pos] := Inverse(result[pos]);
+					result2_inv[pos] := Inverse(result2[pos]);
+					pos := pos + 1;
+				else
+					# neutral element found, actual rank is smaller
+					r2 := r2 - 1;
+				fi;
+			od;
+		
+		# if this wasn't the last iteration we need to reduce the lines in U as preparation for the next computation step
+			for i in [1..lastpos] do
+				
+				# reduce all entries with the new generators
+				for j in [1..r2] do
+					exponents := Exponents(U[i]);
+					e := exponents[Depth(result[pos-r2-1+j])];
+					if e <> 0 then
+						U[i] := U[i] * result_inv[pos-r2-1+j]^(div(e,LeadingExponent(result[pos-r2-1+j])));
+						U2[i] := U2[i] * result2_inv[pos-r2-1+j]^(div(e,LeadingExponent(result[pos-r2-1+j])));
+					fi;
+				od;
+			od;
+			SortParallel(U,U2,compare);
+		fi;
+		
+	od;
+	return [result,result2,U2];
+end );
+
