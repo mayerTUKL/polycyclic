@@ -338,7 +338,7 @@ InstallGlobalFunction( NewIgs, function(inU,P)
 	curr := 1;
 	
 	# Iterate over the generators starting with the smallest depth first -> only entries with higher depth will change
-	while curr < m do
+	while curr <= m do
 		# First handle normalization and the finite exponent relation
 		d := Depth(S[curr]);
 		b := m+1;
