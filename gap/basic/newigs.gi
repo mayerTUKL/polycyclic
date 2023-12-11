@@ -12,16 +12,14 @@ BindGlobal( "DepthOfCommutator", function(coll,i,j)
 	elif l[1] < j then
 		return l[1];
 
+	# in the following cases equality holds => look at the exponent on the right hand side
+	elif l[2] <> 1 then
+		return j;
+	# fixed under conjugation => commutator is trivial
+	elif Length(l) = 2 then
+		return n+1;
 	else
-		if l[2] <> 1 then
-			return j;
-		else
-			if Length(l) = 2 then
-				return n+1;
-			else
-				return l[3];
-			fi;
-		fi;
+		return l[3];
 	fi;
 end );
 
@@ -94,10 +92,6 @@ InstallGlobalFunction( PartitionOfCollector, function(coll)
 	return PartitionBottomUp(coll);
 end );
 
-# There is probably a function already for this and I am too dumb to find it...
-BindGlobal( "div", function(a,b)
-	return (a- (a mod b)) / b;
-end );
 
 # Finds the last index i in L for which Depth(L[i]) <= x by binary search. Returns 0 if there is no such entry.
 BindGlobal( "SearchSortedLastByDepth", function(L,x)
@@ -109,7 +103,7 @@ BindGlobal( "SearchSortedLastByDepth", function(L,x)
 	
 	# the search
 	while hi>lo+1 do
-		mid := lo + div(hi-lo,2);
+		mid := lo + QuoInt(hi-lo,2);
 		if Depth(L[mid]) <= x then
 			lo := mid;
 		else
@@ -155,7 +149,7 @@ BindGlobal( "FiniteRelationsAsMatrixPartition", function(coll, P)
 	return result;
 end );
 
-# help function which reduces the diagonal of an echolon form
+# helper function which reduces the diagonal of an echolon form
 BindGlobal( "ReduceEcholon", function(V)
 	local m,i,j,k,d,a,b,r,q;
 	
@@ -167,7 +161,7 @@ BindGlobal( "ReduceEcholon", function(V)
 			a := Exponents(V[i])[d];
 			b := Exponents(V[j])[d];
 			r := a mod b;
-			q := div(a-r,b);
+			q := QuoInt(a-r,b);
 			if q <> 0 then
 				V[i] := V[i]* V[j]^-q;
 			fi;
@@ -187,9 +181,9 @@ BindGlobal( "Echolon", function(U,P)
 	coll := Collector(U[1]);
 	n := NumberOfGenerators(coll);
 	l := Length(P);
-	result :=[];
-	result_inv :=[];
-	pos :=1;
+	result := [];
+	result_inv := [];
+	pos := 1;
 	expRels := FiniteRelationsAsMatrixPartition(coll,P);
 	orders := RelativeOrders(coll);
 	
@@ -197,84 +191,85 @@ BindGlobal( "Echolon", function(U,P)
 	for t in [1..l] do
 		# find the relevant generators, i. e. of depth at most P[t][2]
 		lastpos := SearchSortedLastByDepth(U,P[t][2]);
-		if lastpos <> 0 then
-			if t <> l then
-				# form the corresponding integer submatrix of the exponents and compute an HNF with its LLL reduced transform
-				S := [];
-				for i in [1..lastpos] do
-					exponents := Exponents(U[i]);
-					S[i] := exponents{[P[t][1]..P[t][2]]};
-				od;
-				# glue the exponent relations right after that
-				Append(S,expRels[t]);
-				# compute HNF
-				H := HermiteIntMatLLLTrans(S);
-				r := Rank(H[1]);
-				r2 := r;
-				V := H[2];
+		if lastpos = 0 then
+			continue;
+		fi;
+		if t <> l then
+			# form the corresponding integer submatrix of the exponents and compute an HNF with its LLL reduced transform
+			S := [];
+			for i in [1..lastpos] do
+				exponents := Exponents(U[i]);
+				S[i] := exponents{[P[t][1]..P[t][2]]};
+			od;
+			# glue the exponent relations right after that
+			Append(S,expRels[t]);
+			# compute HNF
+			H := HermiteIntMatLLLTrans(S);
+			r := Rank(H[1]);
+			r2 := r;
+			V := H[2];
 
-				# apply the transformation to compute the new generators corresponding to the pivots
-				for j in [1..r] do
-					# first check whether the given pivot corresponds to one of the finite exponent relations
-					pivotIndex := PositionNonZero(H[1][j]);
-					if H[1][j][pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
+			# apply the transformation to compute the new generators corresponding to the pivots
+			for j in [1..r] do
+				# first check whether the given pivot corresponds to one of the finite exponent relations
+				pivotIndex := PositionNonZero(H[1][j]);
+				if H[1][j][pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
 
-						elm := neutral;
-						for i in [1..lastpos] do
-							if V[j,i] <> 0 then
-								elm := elm * U[i]^V[j,i];
-							fi;
-						od;
-						result[pos] := elm;
-						# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
-						result_inv[pos] := Inverse(result[pos]);
-						pos := pos + 1;
-					else
-						# neutral element found, actual rank is smaller
-						r2 := r2 - 1;
-					fi;
-				od;
-			
-			# if this wasn't the last iteration we need to reduce the lines in U as preparation for the next computation step
-				for i in [1..lastpos] do
-					
-					# reduce all entries with the new generators
-					for j in [1..r2] do
-						exponents := Exponents(U[i]);
-						e := exponents[Depth(result[pos-r2-1+j])];
-						if e <> 0 then
-							U[i] := U[i] * result_inv[pos-r2-1+j]^(div(e,LeadingExponent(result[pos-r2-1+j])));
+					elm := neutral;
+					for i in [1..lastpos] do
+						if V[j,i] <> 0 then
+							elm := elm * U[i]^V[j,i];
 						fi;
 					od;
+					result[pos] := elm;
+					# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
+					result_inv[pos] := Inverse(result[pos]);
+					pos := pos + 1;
+				else
+					# neutral element found, actual rank is smaller
+					r2 := r2 - 1;
+				fi;
+			od;
+		
+			# if this wasn't the last iteration we need to reduce the lines in U as preparation for the next computation step
+			for i in [1..lastpos] do
+				
+				# reduce all entries with the new generators
+				for j in [1..r2] do
+					exponents := Exponents(U[i]);
+					e := exponents[Depth(result[pos-r2-1+j])];
+					if e <> 0 then
+						U[i] := U[i] * result_inv[pos-r2-1+j]^(QuoInt(e,LeadingExponent(result[pos-r2-1+j])));
+					fi;
 				od;
-				SortBy(U,Depth);
-			else
+			od;
+			SortBy(U,Depth);
+		else
 			# last iteration step does not need an integer transformation matrix and lifting
 			# form the corresponding integer submatrix of the exponents and compute an HNF without its LLL reduced transform
-				S := [];
-				for i in [1..lastpos] do
-					exponents := Exponents(U[i]);
-					S[i] := exponents{[P[t][1]..P[t][2]]};
-				od;
-				# glue the exponent relations right after that
-				Append(S,expRels[t]);
-				H := NormalFormIntMat(S,6);
-				r := H.rank;
+			S := [];
+			for i in [1..lastpos] do
+				exponents := Exponents(U[i]);
+				S[i] := exponents{[P[t][1]..P[t][2]]};
+			od;
+			# glue the exponent relations right after that
+			Append(S,expRels[t]);
+			H := NormalFormIntMat(S,6);
+			r := H.rank;
 
-				# generate the corresponding elements and put them into result
-				for i in [1..H.rank] do
-					v := H.normal[i];
-					pivotIndex := PositionNonZero(v);
-						if v[pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
+			# generate the corresponding elements and put them into result
+			for i in [1..H.rank] do
+				v := H.normal[i];
+				pivotIndex := PositionNonZero(v);
+				if v[pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
 
-							elm := PcpElementByExponents(coll,Concatenation(ListWithIdenticalEntries(P[t][1]-1,0),v));
-							result[pos] := elm;
-							# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
-							result_inv[pos] := Inverse(result[pos]);
-							pos := pos + 1;
-						fi;
-				od;
-			fi;
+					elm := PcpElementByExponents(coll,Concatenation(ListWithIdenticalEntries(P[t][1]-1,0),v));
+					result[pos] := elm;
+					# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
+					result_inv[pos] := Inverse(result[pos]);
+					pos := pos + 1;
+				fi;
+			od;
 		fi;
 		
 	od;
@@ -303,7 +298,7 @@ end );
 BindGlobal( "IsNormalizedPcElement", function(g)
 	local d,e,o,rorder;
 	
-	d:= Depth(g);
+	d := Depth(g);
 	e := LeadingExponent(g);
 	o := RelativeOrder(g);
 	rorder := RelativeOrders(Collector(g))[d];
@@ -313,15 +308,6 @@ BindGlobal( "IsNormalizedPcElement", function(g)
 	return false;
 end );
 
-# Probably exists already. Just checks whether the input is the neutral element
-# TODO: Is this one still neccessary? Can't I just check for equality where it is used, s.th. I don't have to compute g^0 all the time?
-BindGlobal( "myisone", function(g)
-	if g = g^0 then
-		return true;
-	else
-		return false;
-	fi;
-end );
 
 # Computes an induced generating set for the subgroup generated by inU. P is a partition into "abelian segments" of the corresponding collector
 InstallGlobalFunction( NewIgs, function(inU,P)
@@ -349,13 +335,13 @@ InstallGlobalFunction( NewIgs, function(inU,P)
 			# normalization
 			if not IsNormalizedPcElement(S[curr]) then
 				x := NormalizePcElement(S[curr]);
-				S[b] := x^(-div(LeadingExponent(S[curr]),LeadingExponent(x)))*S[curr];
+				S[b] := x^(-QuoInt(LeadingExponent(S[curr]),LeadingExponent(x)))*S[curr];
 				S[curr] := x;
 				b := b+1;
 			fi;
 			# exponent relation
 			exp_elem := S[curr]^order;
-			if not myisone(exp_elem) then
+			if not IsOne(exp_elem) then
 				S[b] := exp_elem;
 				b := b+1;
 			fi;
@@ -372,7 +358,7 @@ InstallGlobalFunction( NewIgs, function(inU,P)
 			# add commutators
 			for i in [curr+1..m] do
 				comm := Comm(S[curr],S[i]);
-				if not myisone(comm) then
+				if not IsOne(comm) then
 					S[b] := comm;
 					b := b+1;
 				fi;
@@ -456,62 +442,63 @@ BindGlobal( "EcholonParallel", function(U,P,U2)
 	for t in [1..l] do
 		# find the relevant generators, i. e. of depth at most P[t][2]
 		lastpos := SearchSortedLastByDepth(U,P[t][2]);
-		if lastpos <> 0 then
-			# form the corresponding integer submatrix of the exponents and compute an HNF with its LLL reduced transform
-			S := [];
-			for i in [1..lastpos] do
-				exponents := Exponents(U[i]);
-				S[i] := exponents{[P[t][1]..P[t][2]]};
-			od;
-			# glue the exponent relations right after that
-			Append(S,expRels[t]);
-			# compute HNF
-			H := HermiteIntMatLLLTrans(S);
-			r := Rank(H[1]);
-			r2 := r;
-			V := H[2];
+		if lastpos = 0 then
+			continue;
+		fi;
+		# form the corresponding integer submatrix of the exponents and compute an HNF with its LLL reduced transform
+		S := [];
+		for i in [1..lastpos] do
+			exponents := Exponents(U[i]);
+			S[i] := exponents{[P[t][1]..P[t][2]]};
+		od;
+		# glue the exponent relations right after that
+		Append(S,expRels[t]);
+		# compute HNF
+		H := HermiteIntMatLLLTrans(S);
+		r := Rank(H[1]);
+		r2 := r;
+		V := H[2];
 
-			# apply the transformation to compute the new generators corresponding to the pivots
-			for j in [1..r] do
-				# first check whether the given pivot corresponds to one of the finite exponent relations
-				pivotIndex := PositionNonZero(H[1][j]);
-				if H[1][j][pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
+		# apply the transformation to compute the new generators corresponding to the pivots
+		for j in [1..r] do
+			# first check whether the given pivot corresponds to one of the finite exponent relations
+			pivotIndex := PositionNonZero(H[1][j]);
+			if H[1][j][pivotIndex] <> orders[pivotIndex + P[t][1]-1] then
 
-					elm := neutral;
-					elm2 := neutral;
-					for i in [1..lastpos] do
-						if V[j,i] <> 0 then
-							elm := elm * U[i]^V[j,i];
-							elm2 := elm2 * U2[i]^V[j,i];
-						fi;
-					od;
-					result[pos] := elm;
-					result2[pos] := elm2;
-					# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
-					result_inv[pos] := Inverse(result[pos]);
-					result2_inv[pos] := Inverse(result2[pos]);
-					pos := pos + 1;
-				else
-					# neutral element found, actual rank is smaller
-					r2 := r2 - 1;
-				fi;
-			od;
-		
-		# if this wasn't the last iteration we need to reduce the lines in U as preparation for the next computation step
-			for i in [1..lastpos] do
-				
-				# reduce all entries with the new generators
-				for j in [1..r2] do
-					exponents := Exponents(U[i]);
-					e := exponents[Depth(result[pos-r2-1+j])];
-					if e <> 0 then
-						U[i] := U[i] * result_inv[pos-r2-1+j]^(div(e,LeadingExponent(result[pos-r2-1+j])));
-						U2[i] := U2[i] * result2_inv[pos-r2-1+j]^(div(e,LeadingExponent(result[pos-r2-1+j])));
+				elm := neutral;
+				elm2 := neutral;
+				for i in [1..lastpos] do
+					if V[j,i] <> 0 then
+						elm := elm * U[i]^V[j,i];
+						elm2 := elm2 * U2[i]^V[j,i];
 					fi;
 				od;
+				result[pos] := elm;
+				result2[pos] := elm2;
+				# also store the inverses TODO: this could be returned as well as they are needed later to compute the commutators again
+				result_inv[pos] := Inverse(result[pos]);
+				result2_inv[pos] := Inverse(result2[pos]);
+				pos := pos + 1;
+			else
+				# neutral element found, actual rank is smaller
+				r2 := r2 - 1;
+			fi;
+		od;
+	
+	# if this wasn't the last iteration we need to reduce the lines in U as preparation for the next computation step
+		for i in [1..lastpos] do
+			
+			# reduce all entries with the new generators
+			for j in [1..r2] do
+				exponents := Exponents(U[i]);
+				e := exponents[Depth(result[pos-r2-1+j])];
+				if e <> 0 then
+					U[i] := U[i] * result_inv[pos-r2-1+j]^(QuoInt(e,LeadingExponent(result[pos-r2-1+j])));
+					U2[i] := U2[i] * result2_inv[pos-r2-1+j]^(QuoInt(e,LeadingExponent(result[pos-r2-1+j])));
+				fi;
 			od;
-			SortParallel(U,U2,compare);
-		fi;
+		od;
+		SortParallel(U,U2,compare);
 		
 	od;
 	return [result,result2,U2];
