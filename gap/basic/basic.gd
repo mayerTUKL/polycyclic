@@ -27,6 +27,7 @@ DeclareGlobalFunction( "RefinedDerivedSeriesDown");
 DeclareGlobalFunction( "TorsionByPolyEFSeries");
 DeclareGlobalFunction( "ModuloSeries" );
 DeclareGlobalFunction( "EfaSeriesParent" );
+DeclareGlobalFunction( "ShortEfaSeries" );
 DeclareAttribute( "EfaSeries", IsPcpGroup );
 
 #############################################################################
