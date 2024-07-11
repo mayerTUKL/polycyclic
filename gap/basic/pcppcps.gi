@@ -124,95 +124,16 @@ IGSValFun := IGSValFun4;
 #F AddToIgs( <igs>, <gens> )
 ##
 InstallGlobalFunction(AddToIgs, function(igs, gens)
-    local coll, rels, n, c, ind, g, d, todo, val, j, f, h, e, a, k, b, u, t, r;
+    local coll, P, ind, t;
 
     if Length(gens) = 0 then return igs; fi;
 
     # get information
     coll := Collector(gens[1]);
-    rels := RelativeOrders(coll);
-    n    := NumberOfGenerators(coll);
-    c    := n+1;
+	P := PartitionOfCollector(coll);
+	
+    ind := NewIgs(Concatenation(igs,gens),P);
 
-    # set up
-    ind  := ListWithIdenticalEntries(n, false);
-    for g in igs do ind[Depth(g)] := g; od;
-
-    # do a reduction step
-    c := TailLimit(ind, c);
-    todo := Set(Filtered(gens, x -> Depth(x) < c));
-    val := List(todo, x -> IGSValFun(x));
-
-    # loop over to-do list until it is empty
-    while Length(todo) > 0 and c > 1 do
-        j := Position(val, Minimum(val));
-        g := Remove(todo, j);
-        d := Depth(g);
-        f := [];
-
-        # shift g into ind
-        while d < c do
-
-            h := ind[d];
-            r := FactorOrder(g);
-            a := LeadingExponent(g);
-
-            # shift in
-            if IsBool(h) then 
-                ind[d] := NormedPcpElement(g);
-                Add(f,d);
-                h := ind[d];
-            elif not IsPrime(r) then
-                b := LeadingExponent(h);
-                e := Gcdex(a, b);
-                if e.coeff1 <> 0 then 
-                    ind[d] := NormedPcpElement((g^e.coeff1)*(h^e.coeff2));
-                    Add(f,d);
-                fi;
-            fi;
-
-            # divide off
-            if g = h then 
-                g := g^0;
-            else
-                b := LeadingExponent(h);
-                e := Gcdex(a,b);
-                g := g^e.coeff3 * h^e.coeff4;
-            fi;
-            d := Depth(g);
-        od;
-
-        # adjust
-        c := TailLimit(ind, c);
-        ReduceExpo(ind, todo, rels);
-
-        # add powers and commutators
-        for d in f do
-            g := ind[d];
-            if rels[d] > 0 then
-                k := g ^ RelativeOrderPcp(g);
-                if Depth(k) < c then Add(todo, k); fi;
-            fi;
-            for j in [1..c-1] do
-                if not IsBool(ind[j]) then
-                    k := Comm(g, ind[j]);
-                    if Depth(k) < c then Add(todo, k); fi;
-                    if rels[j] = 0 then
-                        k := Comm(g, ind[j]^-1);
-                        if Depth(k) < c then Add(todo, k); fi;
-                    fi;
-                fi;
-            od;
-        od;
-
-        # reduce
-        todo := Filtered(todo, x -> Depth(x)<c);
-        val := List(todo, x -> IGSValFun(x));
-        Info(InfoPcpGrp, 3, Length(val)," versus ", ind);
-    od;
-
-    # return resulting list
-    ind := Filtered(ind, x -> not IsBool(x));
     if CHECK_IGS@ then
         Info(InfoPcpGrp, 1, "checking igs ");
         t := CheckIgs(ind, gens);

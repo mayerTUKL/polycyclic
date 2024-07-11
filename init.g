@@ -19,6 +19,7 @@ ReadPackage( "polycyclic", "gap/basic/pcpgrps.gd");
 ReadPackage( "polycyclic", "gap/basic/pcppcps.gd");
 ReadPackage( "polycyclic", "gap/basic/grphoms.gd");
 ReadPackage( "polycyclic", "gap/basic/basic.gd");
+ReadPackage( "polycyclic", "gap/basic/newigs.gd");
 
 ReadPackage( "polycyclic", "gap/cohom/cohom.gd");
 

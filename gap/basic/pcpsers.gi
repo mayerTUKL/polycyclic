@@ -1,6 +1,6 @@
 #############################################################################
 ##
-#W  pcpseries.gi                   Polycyc                       Bettina Eick
+#W  pcpseries.gi                   Polycyc            Bettina Eick, Max Mayer
 ##
 
 #############################################################################
@@ -526,5 +526,35 @@ end );
 ##
 InstallGlobalFunction( LinearActionOnPcp, function( gens, pcp )
     return List( gens, x -> List( pcp, y -> ExponentsByPcp( pcp, y ^ x ) ) );
+end );
+
+#############################################################################
+##
+#F ShortEfaSeries ( G )
+##
+InstallGlobalFunction( ShortEfaSeries, function( G )
+    local L,H,T,Hcomm,subs,p,U,orders,M,pcp;
+
+	L := [G];
+	H := G;
+	while not IsTrivial(H) do
+		Hcomm := DerivedSubgroup(H);
+		pcp := Pcp(H,Hcomm,"snf");
+		orders := RelativeOrdersOfPcp(pcp);
+		subs := Filtered( [1..Length(pcp)], x -> orders[x] > 0 );
+		T := ClosureGroup(Hcomm,Subgroup(G, pcp{subs}));
+
+		if not IsTrivial(H/T) then
+			Append(L,[T]);
+			H := T;
+		else
+			p := Factors(orders[1])[1];
+			M := List(pcp,x->x^p);
+			U := ClosureGroup(Hcomm,Subgroup(H,M));
+			Append(L,[U]);
+			H:=U;
+		fi;
+	od;
+	return L;
 end );
 

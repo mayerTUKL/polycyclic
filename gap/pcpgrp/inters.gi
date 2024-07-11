@@ -1,6 +1,6 @@
 #############################################################################
 ##
-#W  grpint.gi                  Polycyc                           Bettina Eick
+#W  grpint.gi                  Polycyc                Bettina Eick, Max Mayer
 ##
 
 #############################################################################
@@ -17,114 +17,131 @@
 ## simultaneously computing the intersection and sum of two vector spaces.
 InstallMethod( NormalIntersection, "for pcp groups",
                IsIdenticalObj, [IsPcpGroup, IsPcpGroup],
-function( N, U )
-    local G, igs, igsN, igsU, n, s, I, id, ls, rs, is, g, d, al, ar, e, tm;
+    function( N, U )
+    local UN,phi,Ugens,im,phi2;
+    UN := ClosureGroup(U,N);
+    phi := NaturalHomomorphism(UN,N);
+    Ugens := GeneratorsOfGroup(U);
+    im := List(Ugens,x -> Image(phi,x));
+    phi2 := GroupHomomorphismByImagesNC(U,Range(phi),Ugens,im);
+    return Kernel(phi2);
+end );
 
-	# get common overgroup of N and U
-	G := PcpGroupByCollector( Collector( N ) );
+BindGlobal("intersectV2", function(U,H)
+    local G, series, I, nat_maps, i, j, l, U_neu, hom, K, A, L, pcp, pcpK, mats, pcpmodA, k, exp, h, a, orders, vec, stab_gens, subs, pcpS, freeStab, nmap, affineAction;
+    # First determine a linear abelian series
+    G := Parent(U);
+    series := ShortEfaSeries(G);
+    
+    # Setting up the factor group maps
+    nat_maps := List(series,x -> NaturalHomomorphismByNormalSubgroup(G,x));
+    I := Range(nat_maps[1]);
+    # iterating over the linear abelian series
+    for i in [1..Length(series)-1] do
+        # First set up the homomorphism iota : U G_{i+1} / G_{i+1} -> U G_i / G_i \subset G/G_i, uG_{i+1} \mapsto uG_i
 
-    igs  := Igs(G);
-    igsN := Cgs( N );
-    igsU := Cgs( U );
-    n    := Length( igs );
-
-    # if N or U is trivial
-    if Length( igsN ) = 0 then
-        return N;
-    elif Length( igsU ) = 0 then
-        return U;
-    fi;
-
-    # if N or U are equal to G
-    if Length( igsN ) = n and ForAll(igsN, x -> LeadingExponent(x) = 1) then
-        return U;
-    elif Length(igsU) = n and ForAll(igsU, x -> LeadingExponent(x) = 1) then
-        return N;
-    fi;
-
-    # if N is a tail, we can read off the result directly
-    s := Depth( igsN[1] );
-    if Length( igsN ) = n-s+1 and
-       ForAll( igsN, x -> LeadingExponent(x) = 1 ) then
-        I := Filtered( igsU, x -> Depth(x) >= s );
-        return SubgroupByIgs( G, I );
-    fi;
-
-    # otherwise compute
-    id := One(G);
-    ls := ListWithIdenticalEntries( n, id ); # ls = left side
-    rs := ListWithIdenticalEntries( n, id ); # rs = right side
-    is := ListWithIdenticalEntries( n, id ); # is = intersection
-
-    for g in igsU do
-        d := Depth( g );
-        ls[d] := g;
-        rs[d] := g;
-    od;
-
-    I := [];
-    for g in igsN do
-        d := Depth( g );
-        if ls[d] = id then
-            ls[d] := g;
+        # catch trivial case
+        if IsTrivial(Range(nat_maps[i])) then
+            K := Image(nat_maps[i+1],U);
         else
-            Add( I, [ g, id ] );
+            U_neu := GeneratorsOfPcp(Pcp(U,series[i+1]));
+            hom := GroupHomomorphismByImages(Image(nat_maps[i+1],U), Range(nat_maps[i]),List(U_neu,x-> Image(nat_maps[i+1],x)), List(U_neu,x-> Image(nat_maps[i],x)));
+            K := PreImage(hom,I);
+        fi;
+        
+        # Compute the intersection G_i/G_{i+1} \cap H G_{i+1} / G_{i+1} (A \cap H)
+        A := Image(nat_maps[i+1],series[i]);
+        L := Intersection(A, Image(nat_maps[i+1],H));
+        # map to A / A \cap H
+        pcp := Pcp(A,L,"snf");
+        nmap := NaturalHomomorphism(A,L);
+        orders := RelativeOrdersOfPcp(pcp);
+        
+        # Construct the derivation map \delta as an affine action \psi and use the implemented functions
+        # First catch trivial case
+        if Length(pcp) = 0 or IsTrivial(K) then
+            I := K;
+        # the case when A/L is a non trivial abelian group
+        else
+            # Compute the Torsion Subgroup / the corresponding quotient group
+            subs := Filtered( [1..Length(pcp)], x -> orders[x] = 0 ); # indices of infinite cyclic factors
+            pcpK := Pcp(K);
+            if Length(subs) >0 then
+                # compute matrix corresponding to the affine actions of K
+                mats := [];
+                for l in [1..Length(pcpK)] do
+                    mats[l] := [];
+                    # Compute the conjugates with the generators of K
+                    for j in [1..Length(subs)] do
+                        mats[l][j] := ExponentsByPcp(pcp, pcp[subs[j]]^pcpK[l]){subs}; 
+                        mats[l][j][Length(subs)+1] := 0;
+                    od;
+                od;
+
+                # Second step: Compute the images \delta(k) for the generators k of K
+                # Decompose k into k=ha, h \in H, a \in A
+
+                # Compute each generator k of K mod A (hence in HA/A \simeq H / (A \cap H)
+                pcpmodA := Pcp(Image(nat_maps[i+1],H),A);
+                # Catch trivial case, where HA \subset A
+                if Length(pcpmodA) = 0 then
+                    for l in [1..Length(pcpK)] do
+                        mats[l][Length(subs)+1] := ExponentsByPcp(pcp,pcpK[l]){subs};
+                        mats[l][Length(subs)+1][Length(subs)+1] := 1;
+                    od;
+                else
+                    for l in [1..Length(pcpK)] do
+                        k := pcpK[l];
+                        exp := ExponentsByPcp(pcpmodA, k); # exp vector mod A
+
+                        # lift back into G/G_{i+1}, here h = k mod A
+                        h:= MappedVector(exp,pcpmodA);
+                        a := h^-1*k; # a in A and k = h* a
+                        # Write this a in the last line of the affine operation
+                        mats[l][Length(subs)+1] := ExponentsByPcp(pcp,a){subs};
+                        mats[l][Length(subs)+1][Length(subs)+1] := 1;
+                    od;
+                fi;
+                
+                # now compute the stabiliser of the free quotient.
+                vec := ZeroMutable(subs);
+                vec[Length(subs)+1] := 1;
+                freeStab := StabilizerIntegralAction(K, mats,vec);
+            else
+                freeStab := K;
+            fi;
+            pcpS := Pcp(freeStab);
+            # second step, let this stabiliser operate on the entire group A/L
+            # compute the affine action
+            mats := [];
+            pcpmodA := Pcp(Image(nat_maps[i+1],H),A);
+            # Catch trivial case, where HA \subset A
+            if Length(pcpmodA) = 0 then
+                for l in [1..Length(pcpS)] do
+                    mats[l] := [pcpS[l], pcpS[l]];
+                od;
+            else
+                for l in [1..Length(pcpS)] do
+                    k := pcpS[l];
+                    exp := ExponentsByPcp(pcpmodA, k); # exp vector mod A
+
+                    # lift back into G/G_{i+1}, here h = k mod A
+                    h:= MappedVector(exp,pcpmodA);
+                    a := h^-1*k; # a in A and k = h* a
+                    mats[l] := [pcpS[l],a];
+                od;
+            fi;
+            
+            affineAction := function( pnt, mat )
+                return Image( nmap, PreImagesRepresentative( nmap, pnt )^mat[1] *mat[2]);
+            end;
+            
+            stab_gens := PcpOrbitStabilizer( Image(nmap,OneOfPcp(pcp)), pcpS, mats, affineAction ).stab;
+            I := Subgroup(K,stab_gens);
+            
         fi;
     od;
-
-    # enter the pairs [ ar, al ] of <I> into [ <ls>, <rs> ]
-    for tm in I do
-        al := tm[1];
-        ar := tm[2];
-        d  := Depth( al );
-
-        # compute sum and intersection
-        while al <> id and ls[d] <> id do
-            e := Gcdex( LeadingExponent(ls[d]), LeadingExponent(al) );
-            tm := ls[d]^e.coeff1 * al^e.coeff2;
-            al := ls[d]^e.coeff3 * al^e.coeff4;
-            ls[d] := tm;
-            tm := rs[d]^e.coeff1 * ar^e.coeff2;
-            ar := rs[d]^e.coeff3 * ar^e.coeff4;
-            rs[d] := tm;
-            d := Depth( al );
-        od;
-
-        # we have a new sum generator
-        if al <> id then
-            Assert(1, ls[d] = id);
-            ls[d] := al; # new generator of UN
-            rs[d] := ar;
-
-            tm := RelativeOrder( al );
-            if tm > 0 then
-                al := al^tm;
-                ar := ar^tm;
-                Add( I, [ al, ar ] );
-            fi;
-
-        # we have a new intersection generator
-        elif ar <> id then
-            Assert(1, al = id);
-            # here we have al=id; so ar is in the intersection;
-            # filter it into the polycyclic sequence `is`
-            d := Depth( ar );
-            while ar <> id and is[d] <> id  do
-                e  := Gcdex(LeadingExponent( is[d] ), LeadingExponent( ar ));
-                tm := is[d]^e.coeff1 * ar^e.coeff2;
-                ar := is[d]^e.coeff3 * ar^e.coeff4;
-                is[d] := tm;
-                d  := Depth( ar );
-            od;
-            if ar <> id then
-                is[d] := ar;
-            fi;
-        fi;
-    od;
-
-    # sum := Filtered( ls, x -> x <> id );
-    I := Filtered( is, x -> x <> id );
-    return Subgroup( G, I );
+    return PreImage(nat_maps[Length(series)],I);
 end );
 
 #############################################################################
@@ -151,5 +168,46 @@ function( U, V )
         return NormalIntersection( V, U );
     fi;
 
-    Error("sorry: intersection for non-normal groups not yet installed");
+    return intersectV2(U,V);
 end );
+
+#############################################################################
+##
+#M Intersection( U, N )
+##
+InstallGlobalFunction( PcpZassenhausIntersection, function(N,U)
+    local Ugens,Ngens,G,GG,coll,P,L,res,ind,n,gens,i,k;
+    
+    G := Parent(U);
+    coll := Collector(U);
+    n := NumberOfGenerators(coll);
+    P:=PartitionOfCollector(coll);
+    k:=Length(P);
+    Append(P,List(P{[2..Length(P)]}, x -> [x[1]+n,x[2]+n]));
+    P[k][2] := P[1][2] + n;
+    
+    GG := DirectProduct(G,G);
+    L:=[];
+    
+    #choose generator set
+    Ugens := GeneratorsOfGroup(U);
+    Ngens := GeneratorsOfGroup(N);
+    
+    for i in [1..Length(Ugens)] do
+    Add(L,Image(Embedding(GG,1),Ugens[i])*Image(Embedding(GG,2),Ugens[i]));
+    od;
+    for i in [1..Length(Ngens)] do
+    Add(L,Image(Embedding(GG,1),Ngens[i]));
+    od;
+    
+    res := NewCgs(L,P);
+    
+    # filter the result
+    gens := Filtered(res,x-> Depth(x)>n);
+    # project to G
+    gens := List(gens, x-> PcpElementByExponents(coll,Exponents(x){[n+1..2*n]}));
+    
+    return Subgroup(G,gens);
+
+end );
+
