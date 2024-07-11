@@ -173,7 +173,7 @@ end );
 # Given a set of generators U of some subgroup and a partition P of the corresponding collector computes a new set of generators result such that Depth(result[i]) < Depth(result[j]) for all i < j
 # CAUTION: Changes the input variable U!
 BindGlobal( "Echolon", function(U,P)
-	local n,l,coll,result,result_inv,pos,t,j,i,lastpos,S,H,V,r,r2,neutral,exponents,e,expRels,elm,pivotIndex,orders,v;
+	local n,l,coll,result,result_inv,pos,t,j,i,lastpos,S,H,V,r,r2,neutral,exponents,e,expRels,elm,pivotIndex,orders,v,Ufinite;
 	
 	# keeping U sorted makes search easier
 	SortBy(U,Depth);
@@ -209,6 +209,9 @@ BindGlobal( "Echolon", function(U,P)
 			r2 := r;
 			V := H[2];
 
+			# first clear everything left in Ufinite
+			Ufinite:=[];
+
 			# apply the transformation to compute the new generators corresponding to the pivots
 			for j in [1..r] do
 				# first check whether the given pivot corresponds to one of the finite exponent relations
@@ -228,6 +231,15 @@ BindGlobal( "Echolon", function(U,P)
 				else
 					# neutral element found, actual rank is smaller
 					r2 := r2 - 1;
+					
+					# add the reducable element to Ufinite
+					elm := neutral;
+					for i in [1..lastpos] do
+						if V[j,i] <> 0 then
+							elm := elm * U[i]^V[j,i];
+						fi;
+					od;
+					Add(Ufinite,elm);
 				fi;
 			od;
 		
@@ -243,6 +255,18 @@ BindGlobal( "Echolon", function(U,P)
 					fi;
 				od;
 			od;
+			# also reduce the elements in Ufinite and add them to U
+			for i in [1..Length(Ufinite)] do
+			# reduce all entries with the new generators
+				for j in [1..r2] do
+					exponents := Exponents(Ufinite[i]);
+					e := exponents[Depth(result[pos-r2-1+j])];
+					if e <> 0 then
+						Ufinite[i] := Ufinite[i] * result_inv[pos-r2-1+j]^(QuoInt(e,LeadingExponent(result[pos-r2-1+j])));
+					fi;
+				od;
+			od;
+			Append(U,Ufinite);
 			SortBy(U,Depth);
 		else
 			# last iteration step does not need an integer transformation matrix and lifting

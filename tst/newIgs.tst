@@ -269,12 +269,12 @@ gap> NewCgs(U,P);
 #
 #######################################
 #
-# The previous example had an unordinary long runtime when using the "better" permutation than this one.
+# The previous example had an unordinary long runtime when using the "better" segmentation than this one.
 #
 gap> Q:=[ [ 1, 1 ], [ 2, 6 ], [ 7, 10 ], [ 11, 11 ], [ 12, 12 ], [ 13, 13 ], [ 14, 14 ], [ 15, 15 ], [ 16, 16 ], [ 17, 17 ], [ 18, 18 ], [ 19, 19 ], [ 20, 20 ], [ 21, 21 ], [ 22, 22 ], [ 23, 23 ], [ 24, 24 ] ];;
 gap> NewCgs(U,Q);
 [ g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, 
-  g18, g19, g20, g21, g22, g23, g24 ]  
+  g18, g19, g20, g21, g22, g23, g24 ]
 
 #
 gap> STOP_TEST( "newIgs.tst", 1);
